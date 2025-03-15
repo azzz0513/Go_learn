@@ -905,7 +905,7 @@ func UserGroup(r *gin.RouterGroup) {
 
 
 ### 中间件
-![alt text](image-13.png)
+![alt text](images/image-13.png)
 #### 局部中间件
 ```Go
 package main

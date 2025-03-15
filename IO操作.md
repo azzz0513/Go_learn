@@ -350,7 +350,7 @@ func HandleError(err error) {
 ### bufio包
 bufio是通过缓冲来提高效率
 把文件读取进缓冲（内存）之后再读取的时候就可以避免文件系统的io，从而提高速度。同理在进行写操作的时候，先把文件写入缓冲（内存），然后由缓冲写入文件系统。
-![alt text](image-4.png)
+![alt text](images/image-4.png)
 
 #### 读操作
 bufio.Reader是bufio中对io.Reader的封装
