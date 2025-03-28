@@ -43,6 +43,7 @@ func main() {
 ```
 
 ### 响应
+服务器处理完请求后返回的“回答”，包含客户端需要的数据或操作结果。
 #### 响应字符串
 ```Go
 package main
@@ -267,6 +268,7 @@ func main() {
 
 
 ### 请求
+客户端向服务器发送的“要求”，目的是获取资源（如网页、图片）或提交数据（如登录表单）。
 #### 查询参数Query
 不是GET请求专属的
 
@@ -874,7 +876,7 @@ func main() {
 }
 ```
 
-路由分组：把一类api划分到一个组，可以给这个组加上统一的中间件
+**路由分组**：把一类api划分到一个组，可以给这个组加上统一的中间件
 ```Go
 package main
 
@@ -1035,5 +1037,65 @@ func main() {
 	g.Use(GM1, GM2)
 	g.GET("/users", Home2)
 	router.Run(":8080")
+}
+```
+
+
+### 优雅关机
+在服务端关机命令发出后不是立即关机，而是等待当前还在处理的请求全部处理完毕后再退出程序，是一种对客户端友好的关机方式。而执行`ctrl+C`关闭服务端时，会强制结束进程导致正在访问的请求出现问题。
+
+可以通过`http.Server`内置的`Shutdown()`方法实现优雅关机：
+```Go
+package main
+
+import (
+	"github.com/gin-gonic/gin"
+	"golang.org/x/net/context"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+)
+
+func main() {
+	r := gin.Default()
+	r.GET("/", func(c *gin.Context) {
+		time.Sleep(5 * time.Second)
+		c.String(http.StatusOK, "Hello Gin")
+	})
+
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: r,
+	}
+
+	go func() {
+		// 开启一个goroutine启动服务
+		// 不开启goroutine会导致后续代码无法执行，程序一直在ListenAndServer中循环
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	// 等待中断信号来优雅地关闭服务器，为关闭服务器操作设置一个5秒的超时
+	quit := make(chan os.Signal, 1) // 创建一个接收信号的通道
+	// kill 默认会发送syscall.SIGTERM信号
+	// kill -2 发送syscall.SIGINT信号，我们常用的Ctrl+C就是触发系统SIGINT信号
+	// kill -9 发送syscall.SIGKILL信号，但是不能被捕获，所以不需要添加他
+
+	// signal.Notify把收到的syscall.SIGINT或syscall.SIGTERM信号转发给quit
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM) // 此处不会阻塞
+	<-quit                                               // 在此处堵塞，当接收到上述两种信号时才会往下执行
+	log.Println("Shutdown Server ...")
+	// 创建一个5秒超时的context
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// 5秒内优雅关闭服务（将未处理完的请求处理完再关闭服务），超过5秒就超时退出
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("Server Shutdown:", err)
+	}
+	log.Println("Server exiting")
 }
 ```
