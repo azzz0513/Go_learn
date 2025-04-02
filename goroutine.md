@@ -631,7 +631,7 @@ close(ch)
 ```Go
 v, ok := <- ch
 ```
-如果ok的值为true，表示成功从通道中读取了一个数据value，如果ok是false，这意味着我们正从一个封闭的通道读取数据。从封闭通道读取的值将是通道类型的零值。
+如果ok的值为true，表示成功从通道中读取了一个数据value，如果ok是false，这意味着我们正从一个封闭的通道读取数据。==从封闭通道读取的值将是通道类型的零值。==
 例：如果通道是一个int通道，那么从封闭通道中获取的value就是0.
 
 ```Go
@@ -1050,3 +1050,104 @@ func main() {
 > 计算 ch1 的值
 > 计算 ch2 的值
 > 发送到 ch2
+
+
+### Context
+在Go语言中，context 是一个核心并发控制工具，用于管理跨Goroutine的请求生命周期、传递元数据和实现协调式取消。
+```Go
+type Context interface {
+	Deadline() (deadline time.Time, ok bool)
+	Done() <-chan struct{}
+	Err() error
+	Value(key any) any
+}
+```
+
+```Go
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+func step1(ctx context.Context) context.Context {
+	child := context.WithValue(ctx, "name", "张三")
+	return child
+}
+
+func step2(ctx context.Context) context.Context {
+	child := context.WithValue(ctx, "age", 13)
+	return child
+}
+
+func step3(ctx context.Context) {
+	fmt.Printf("name %s\n", ctx.Value("name"))
+	fmt.Printf("age %d\n", ctx.Value("age"))
+}
+
+func f1() {
+	// 定时关闭管道
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	// 超时关闭之后触发ctx.Done，函数返回前调用cancel()放置内存泄露
+	defer cancel()
+
+	select {
+	case <-ctx.Done():
+		fmt.Println("timeout")
+	}
+}
+
+func f2() {
+
+	// 父context关闭会关闭其子context
+	// 子context关闭并不会关闭其父context，只有父context自身的超时时间到期或者被显示Cancel，父context才会关闭
+	parent, cancel1 := context.WithTimeout(context.Background(), time.Millisecond*1000)
+	defer cancel1()
+	t1 := time.Now()
+
+	time.Sleep(time.Millisecond * 250)
+
+	child, cancel2 := context.WithTimeout(parent, time.Millisecond*250)
+	defer cancel2()
+	t2 := time.Now()
+
+	select {
+	case <-parent.Done():
+		fmt.Println("parent done")
+		t3 := time.Now()
+		fmt.Println(t3.Sub(t1).Milliseconds(), t3.Sub(t2).Milliseconds())
+	case <-child.Done():
+		fmt.Println("child done")
+		t3 := time.Now()
+		fmt.Println(t3.Sub(t1).Milliseconds(), t3.Sub(t2).Milliseconds())
+	}
+}
+
+func f3() {
+	// 显式调用CancelFunc关闭管道
+	ctx, cancel := context.WithCancel(context.Background())
+	t0 := time.Now()
+	go func() {
+		time.Sleep(time.Millisecond * 500)
+		cancel()
+	}()
+	select {
+	case <-ctx.Done():
+		fmt.Println("ctx done")
+		t1 := time.Now()
+		fmt.Println(t1.Sub(t0).Milliseconds())
+	}
+}
+
+func main() {
+	//grandParent := context.Background()
+	//father := step1(grandParent)
+	//grandSon := step2(father)
+	//step3(grandSon)
+	//f1()
+	f2()
+	//f3()
+}
+```
