@@ -1099,3 +1099,116 @@ func main() {
 	log.Println("Server exiting")
 }
 ```
+
+### 使用Air实现gin框架实时重新加载
+在修改了项目代码之后，程序能够自动重新加载并执行（live-reload）。
+Air支持以下特性：
+- 彩色日志输出
+- 自定义构建或二进制命令
+- 支持忽略子目录
+- 启动后支持监听新目录
+- 更好的构建过程
+
+#### 安装Air
+##### Go
+`go get -u github.com/air-verse/air@latest`
+
+##### Windows
+`curl -fLo air.exe https://github.com/cosmtrek/air/releases/latest/download/air_win_amd64.exe`
+
+##### Docker
+```Dockerfile
+# 选择你想要的版本，>= 1.16
+FROM golang:1.23-alpine
+
+WORKDIR /app
+
+RUN go install github.com/cosmtrek/air@latest
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+CMD ["air", "-c", ".air.toml"]
+```
+
+```yaml
+version: "3.8"
+services:
+  web:
+    build:
+      context: .
+      # 修改为你的 Dockerfile 路径
+      dockerfile: Dockerfile
+    ports:
+      - 8080:3000
+    # 为了实时重载，将代码目录绑定到 /app 目录是很重要的
+    volumes:
+      - ./:/app
+```
+
+
+#### 使用Air
+为了敲代码方便，可以将`alias air='~/.air'`加到你的`.bashrc`或`.zshrc`中。
+
+首先进入项目目录：
+`cd /path/to/your_project`
+最简单的用法就是直接执行下面的命令：
+```conf
+# 首先在当前目录下查找`.air.conf`配置文件，如果找不到就使用默认的
+air -c .air.conf
+```
+推荐的使用方式：
+```conf
+# 1.在当前目录创建一个新的配置文件.air.conf
+touch .air.conf
+
+# 2.复制`air_example.conf`中的内容到这个文件，然后根据需要进行修改
+
+# 3.使用你的配置运行air，如果文件名为`air.conf`，只需执行`air`
+air
+```
+
+##### air_example.conf
+```conf
+# 工作目录
+# 使用 . 或绝对路径，请注意`tmp_dir`目录必须在`root`目录下
+root = "."
+tmp_dir = "tmp"
+
+[build]
+# 只需要写平常编译使用的shell命令。也可以使用`make`
+cmd = "go build -o ./tmp/main.exe"
+# 由`cmd`命令得到的二进制文件名
+bin = "tmp/main"
+# 自定义的二进制，可以添加额外的编译标识例如添加GIN_MODE=release
+full_bin = "./tmp/main ./conf/config.yaml"
+# 监听以下文件扩展名的文件
+include_ext = ["go", "tpl", "tmpl", "html", "yaml"]
+# 忽略这些文件扩展名或目录
+exclude_ext = ["assets", "tmp", "vendor", "frontend/node_modules", "*.log"]
+# 监听以下指定目录的文件
+include_dir = []
+# 排除以下文件
+exclude_file = []
+# 如果文件更改过于频繁，则没有必要在每次更改时都触发构建。可以设置触发构建的延迟时间
+delay = 1000 # ms
+# 发生构建错误时，停止运行旧的二进制文件
+stop_on_error = true
+# air的日志文件名，该日志文件被放置在“tmp_dir”中
+log = "air_errors.log"
+
+[log]
+# 显示日志时间
+time = true
+
+[color]
+# 自定义每个部分现实的颜色。如果找不到颜色，使用原始的应用程序日志
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+
+[misc]
+# 退出时删除tmp目录
+clean_on_exit = true
+```
